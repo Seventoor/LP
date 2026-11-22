@@ -13,6 +13,8 @@ Kein Build-Schritt. `index.html` ist die komplette App in einer Datei, Reihenfol
 6. App-Block `{ … }`: Karte, Suche, Liste, Detailansicht, Filter, Merkliste (GPX-Export), Ortssuche
 
 `lost-radar.html` leitet nur auf `./` weiter (alter Link).
+
+Home-Bildschirm (iPhone/Android): `manifest.webmanifest`, Icons in `icons/` (Quelle `icons/icon.svg`, PNGs daraus gerendert: `apple-touch-icon.png` 180 px, 192, 512, maskable 512). Als Web-App läuft sie im Standalone-Modus mit transparenter Statusleiste (`black-translucent`); `#statusscrim` legt dann oben einen dunklen Verlauf unter Uhrzeit/Akku, und das Bottom-Sheet rechnet den oberen Safe-Area-Abstand ein (`safeTop()`).
 Die Datei läuft auch lokal per `file://`. Alle externen Dienste müssen deshalb CORS-fähig sein und ohne Referer funktionieren.
 
 ## Datenfluss

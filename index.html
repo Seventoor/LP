@@ -5,6 +5,16 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#1d5236">
 <title>Lost Radar</title>
+<meta name="description" content="Verlassene und stillgelegte Orte in Deutschland, live aus OpenStreetMap.">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Lost Radar">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="format-detection" content="telephone=no">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<link rel="icon" type="image/svg+xml" href="icons/icon.svg">
+<link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png">
+<link rel="manifest" href="manifest.webmanifest">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=Barlow:wght@400;500;600&display=swap">
@@ -692,6 +702,14 @@ button{cursor:pointer}
 :focus-visible{outline:3px solid var(--sign);outline-offset:2px}
 #app{position:fixed;inset:0}
 #map{position:absolute;inset:0;background:var(--bg)}
+/* Home-Bildschirm-App: Statusleiste liegt transparent über der Karte, ein dezenter Verlauf hält Uhrzeit und Akku lesbar */
+#statusscrim{display:none}
+@media (display-mode:standalone){
+  html,body{overscroll-behavior:none}
+  body{-webkit-user-select:none;user-select:none}
+  input,textarea,#body{-webkit-user-select:text;user-select:text}
+  #statusscrim{display:block;position:fixed;z-index:1000;left:0;right:0;top:0;height:calc(env(safe-area-inset-top,0px) + 14px);background:linear-gradient(rgba(0,0,0,.42),rgba(0,0,0,0));pointer-events:none}
+}
 .leaflet-container{background:var(--bg);font:inherit}
 .leaflet-control-attribution{font-size:12px;background:color-mix(in srgb,var(--panel) 85%,transparent)!important;color:var(--muted)}
 .leaflet-control-attribution a{color:var(--moss)}
@@ -846,6 +864,7 @@ button{cursor:pointer}
 </head>
 <body>
 <div id="app">
+<div id="statusscrim" aria-hidden="true"></div>
   <div id="map" aria-label="Karte"></div>
 
   <form id="bar" role="search" autocomplete="off">
@@ -1375,7 +1394,9 @@ function drawDots() {
 /* ---------- Bottom-Sheet ---------- */
 const sheet = $('#sheet'), grab = $('#grab'), body = $('#body');
 let sheetSt = 'half';
-const shPx = st => { const H = window.innerHeight; return st === 'peek' ? 96 : st === 'full' ? H - 80 : Math.round(H * 0.46); };
+// Oberer Sicherheitsabstand (Notch/Statusleiste), steckt in der top-Position der Suchleiste
+const safeTop = () => Math.max(0, (parseFloat(getComputedStyle($('#bar')).top) || 10) - 10);
+const shPx = st => { const H = window.innerHeight; return st === 'peek' ? 96 : st === 'full' ? H - 80 - safeTop() : Math.round(H * 0.46); };
 function setSheet(st) {
   sheetSt = st;
   if (wide()) { sheet.style.height = ''; root.style.setProperty('--sh', '0px'); return; }
@@ -1391,7 +1412,7 @@ grab.addEventListener('pointermove', e => {
   if (!drag) return;
   const dy = e.clientY - drag.y;
   if (Math.abs(dy) > 5) drag.moved = true;
-  sheet.style.height = Math.max(80, Math.min(window.innerHeight - 70, drag.h - dy)) + 'px';
+  sheet.style.height = Math.max(80, Math.min(window.innerHeight - 70 - safeTop(), drag.h - dy)) + 'px';
 });
 const endDrag = () => {
   if (!drag) return;
