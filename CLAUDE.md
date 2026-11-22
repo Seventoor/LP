@@ -32,8 +32,8 @@ Die Datei läuft auch lokal per `file://`. Alle externen Dienste müssen deshalb
    - `reuse`: Betrieb auf dem Gelände (unter 1 ha reicht 1 Eintrag, sonst mind. 2 bzw. 1 pro 5 ha) −45
    - `part`: vereinzelt Betrieb auf großem Gelände −15
    - `bau`: nur Baustelle −25 (zusätzlich zu `reuse`/`part` ebenfalls −25)
-   - `busy`: Punkt mit mind. 3 Betrieben im Umkreis, also eher Leerstand in der Einkaufsstraße −30
-   - `near`: Punkt mit 1–2 Betrieben im Umkreis −10
+   - `busy`: Laden oder Lokal als Punkt mit mind. 3 Betrieben im Umkreis, also eher Leerstand in der Einkaufsstraße −30
+   - `near`: sonstiger Punkt mit Betrieb im Umkreis (bei Bauwerken wie Bunkern auch ab 3) −10
    - `none`: nichts gefunden, `na`: nicht prüfbar (keine geschlossene Fläche)
 
    `score0`/`why0` halten den Grundwert, `applyCheck()` rechnet immer von dort. Funde, die die Sammelprüfung nicht abdeckt, werden beim Öffnen der Detailansicht einzeln geprüft.
@@ -65,7 +65,10 @@ Mobile first.
 - **Farben:** Moos `#1d5236`, Warnschild-Gelb `#ffd400`, Beton `#e6e4dd`. Dark Mode über `prefers-color-scheme`.
 
 ## Stand und offene Punkte
-- **Live-Test:** Haupt- und Gegencheck-Abfrage laufen auf maps.mail.ru (Overpass 0.7.62) fehlerfrei durch. Bremen und Umgebung (ca. 820 km²): Hauptabfrage 24 s, rund 1.100 Elemente; Gegencheck für 400 Funde 28 s. Die 24 s liegen knapp unter dem Server-Timeout von 25 s, bei 4.000 km² in dichten Gegenden kann es eng werden. overpass-api.de war aus der Cloud-Umgebung nicht erreichbar, private.coffee und kumi.systems antworteten nicht; maps.mail.ru war zeitweise überlastet (504).
+- **Live-Test (November 2026):** Haupt- und Gegencheck-Abfrage laufen auf echten Overpass-Servern (0.7.62) fehlerfrei durch.
+  - maps.mail.ru, Bremen und Umgebung (ca. 820 km²): Hauptabfrage 24 s, rund 1.100 Elemente; Gegencheck-Entwurf für 400 Funde 28 s. Die 24 s liegen knapp unter dem Server-Timeout von 25 s, bei 4.000 km² in dichten Gegenden kann es eng werden.
+  - overpass.osm.ch (nur Schweiz), Zürich (ca. 315 km²): kompletter Durchlauf in der App per Playwright, Hauptabfrage 10–11 s, Gegencheck für 182 Funde 20–22 s.
+  - overpass-api.de war aus der Cloud-Umgebung nicht erreichbar (Verbindung zurückgesetzt), private.coffee und kumi.systems antworteten nicht, maps.mail.ru war zeitweise überlastet (504). Wie schnell es auf overpass-api.de läuft, ist also weiter offen.
 - `map_to_area` gibt auf Overpass 0.7.62 geschlossene Wege direkt als Fläche zurück. Ältere Server liefern Flächen nur, wenn der Area-Creator sie angelegt hat; Funde ohne Fläche landen dann als `na` („nicht prüfbar“) statt falsch als „nichts gefunden“.
 - Kategorien und Score sind Heuristiken und sollten an echten Treffern nachjustiert werden.
 - Ideen für später: Trefferliste exportieren, besuchte Orte abhaken, eigene Notizen pro Ort.

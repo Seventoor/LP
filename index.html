@@ -1416,7 +1416,8 @@ var LR = (function () {
 
   function judge(it, found) {
     var act = found.filter(function (a) { return !a.bau; }).length, bau = found.length - act, ha = (it.area || 0) / 10000, v;
-    if (it.type === 'node') v = act >= 3 ? 'busy' : act ? 'near' : bau ? 'bau' : 'none';
+    // „Belebte Lage“ nur bei Läden und Lokalen; ein Bunker an einer belebten Straße bleibt ein Bunker
+    if (it.type === 'node') v = act >= 3 && /^(amenity|shop|office|craft|tourism|leisure)$/.test(it.k) ? 'busy' : act ? 'near' : bau ? 'bau' : 'none';
     else if (act && (ha < 1 || act >= Math.max(2, Math.ceil(ha / 5)))) v = 'reuse';
     else if (bau) v = 'bau';
     else v = act ? 'part' : 'none';
@@ -1784,7 +1785,7 @@ function chkHTML(it) {
   let cls = '', head, txt = '';
   if (!c) {
     if (it.chkErr) { head = 'Gegencheck hat nicht geklappt'; txt = 'Die OSM-Server sind gerade ausgelastet. <button type="button" class="mini" data-act="recheck">Nochmal prüfen</button>'; }
-    else if (!C.checkable(it)) { head = 'Kein Gegencheck möglich'; txt = it.len ? 'Bei Tunneln klappt das nicht.' : 'Die Fläche ist dafür zu groß.'; }
+    else if (!C.checkable(it)) { head = 'Kein Gegencheck möglich'; txt = it.len ? 'Bei Tunneln klappt das nicht.' : it.area > 1e6 ? 'Die Fläche ist dafür zu groß.' : 'Die Umrisse sind in OSM nicht als Fläche erfasst.'; }
     else { head = 'Gegencheck läuft …'; txt = 'Die App schaut nach, was OpenStreetMap heute ' + (pt ? 'direkt drumherum' : 'auf dem Gelände') + ' verzeichnet.'; }
   } else if (c.v === 'reuse') { cls = 'warn'; head = 'Wohl umgenutzt'; txt = there + ' verzeichnet OSM heute: ' + what + '.'; }
   else if (c.v === 'part') { cls = 'warn'; head = 'Teilweise wieder genutzt'; txt = there + ' verzeichnet OSM: ' + what + '. Der Rest kann noch leer stehen.'; }
@@ -1814,6 +1815,8 @@ async function runCheck(list, batch) {
   let hit = 0;
   try {
     const j = await C.overpass(C.checkQuery(list), ctl.signal);
+    // Abgebrochene Antwort nicht auswerten, sonst stünde bei manchen fälschlich „nichts gefunden“
+    if (j.remark && /timed out|runtime|memory/i.test(j.remark)) throw new Error(j.remark);
     const skip = {};
     S.items.concat(list).forEach(i => { skip[i.id] = 1; });
     const res = C.checkRead(list, j.elements || [], skip);
@@ -1825,7 +1828,10 @@ async function runCheck(list, batch) {
     }
     if (list.some(it => S.favs[it.id])) store.set('favs', S.favs);
   } catch (e) {
-    if (!(e && e.name === 'AbortError')) list.forEach(it => { it.chkErr = true; });
+    if (!(e && e.name === 'AbortError')) {
+      list.forEach(it => { it.chkErr = true; });
+      if (batch) toast('Der Gegencheck hat gerade nicht geklappt. Beim Antippen eines Ortes prüft die App einzeln nach.');
+    }
   } finally {
     list.forEach(it => { it.chkRun = false; });
     if (S.chkBusy === ctl) S.chkBusy = null;
