@@ -690,9 +690,9 @@ svg.leaflet-image-layer.leaflet-interactive path {
    COLOUR  concrete ground, white or near-black panels, moss green, warning-sign yellow accent
    TYPE    Barlow Condensed (German signage feel) + Barlow
    LAYOUT  phone: map, floating search, scan pill, bottom sheet; from 900px: 400px sidebar left, map right */
-:root{color-scheme:light dark;--bg:#e6e4dd;--panel:#ffffff;--ink:#141611;--muted:#565d52;--line:#d9dbd2;--soft:#f0f1ec;--moss:#1d5236;--mossink:#ffffff;--sign:#ffd400;--signink:#14130a;--shadow:0 4px 18px rgba(20,22,17,.18);--sh:46%}
-@media (prefers-color-scheme:dark){:root:not([data-theme=light]){--bg:#101210;--panel:#191c19;--ink:#e8ebe3;--muted:#a1a899;--line:#30352f;--soft:#232723;--moss:#8fd1a7;--mossink:#0d1a12;--shadow:0 4px 18px rgba(0,0,0,.5)}}
-:root[data-theme=dark]{color-scheme:dark;--bg:#101210;--panel:#191c19;--ink:#e8ebe3;--muted:#a1a899;--line:#30352f;--soft:#232723;--moss:#8fd1a7;--mossink:#0d1a12;--shadow:0 4px 18px rgba(0,0,0,.5)}
+:root{color-scheme:light dark;--bg:#e6e4dd;--panel:#ffffff;--ink:#141611;--muted:#565d52;--line:#d9dbd2;--soft:#f0f1ec;--moss:#1d5236;--mossink:#ffffff;--sign:#ffd400;--signink:#14130a;--shadow:0 4px 18px rgba(20,22,17,.18);--sh:46%;--warn:#b3400d}
+@media (prefers-color-scheme:dark){:root:not([data-theme=light]){--bg:#101210;--panel:#191c19;--ink:#e8ebe3;--muted:#a1a899;--line:#30352f;--soft:#232723;--moss:#8fd1a7;--mossink:#0d1a12;--shadow:0 4px 18px rgba(0,0,0,.5);--warn:#ff9d66}}
+:root[data-theme=dark]{color-scheme:dark;--bg:#101210;--panel:#191c19;--ink:#e8ebe3;--muted:#a1a899;--line:#30352f;--soft:#232723;--moss:#8fd1a7;--mossink:#0d1a12;--shadow:0 4px 18px rgba(0,0,0,.5);--warn:#ff9d66}
 :root[data-theme=light]{color-scheme:light}
 *{box-sizing:border-box;min-width:0}
 html,body{height:100%;margin:0}
@@ -804,7 +804,14 @@ button{cursor:pointer}
 .why li{display:flex;justify-content:space-between;gap:14px;padding:5px 0;border-bottom:1px dashed var(--line)}
 .why b{white-space:nowrap}
 .why .p{color:var(--moss)}
-.why .m{color:#c2410c}
+.why .m{color:var(--warn)}
+.gcheck{margin:14px 0 0;padding:10px 12px;border-radius:12px;background:var(--soft);font-size:14.5px}
+.gcheck b{display:block;font-weight:600}
+.gcheck p{margin:3px 0 0;color:var(--muted)}
+.gcheck .age{font-size:13px}
+.gcheck.warn{background:color-mix(in srgb,var(--warn) 12%,var(--panel))}
+.gcheck.warn b{color:var(--warn)}
+.gcheck.ok b{color:var(--moss)}
 .tags{margin-top:16px;font-size:14px}
 .tags summary{cursor:pointer;color:var(--muted);padding:6px 0}
 .scroll{overflow-x:auto}
@@ -1003,6 +1010,25 @@ var LR = (function () {
   var SMALLB = set('garage garages shed carport roof hut cabin kiosk toilets container tent allotment_house greenhouse service ' +
     'static_caravan shelter');
 
+  // Gegencheck: Nutzungen, an denen man erkennt, dass auf einem Gelände heute wieder Betrieb ist
+  var ACT = {
+    amenity: set('restaurant cafe fast_food bar pub biergarten ice_cream food_court nightclub cinema theatre arts_centre ' +
+      'community_centre events_venue conference_centre school kindergarten childcare college university research_institute ' +
+      'library doctors dentist clinic hospital pharmacy nursing_home social_facility bank post_office police fire_station ' +
+      'townhall courthouse place_of_worship fuel car_wash marketplace veterinary prison music_school language_school ' +
+      'driving_school training coworking_space casino studio'),
+    tourism: set('hotel motel guest_house hostel apartment museum gallery attraction camp_site caravan_site zoo theme_park aquarium'),
+    leisure: set('fitness_centre sports_centre sports_hall bowling_alley escape_game trampoline_park indoor_play dance ' +
+      'amusement_arcade adult_gaming_centre sauna water_park ice_rink hackerspace climbing horse_riding stadium marina')
+  };
+  var CHECK_MAX_M2 = 1e6, NEAR_M = 30;
+  // Notizen in OSM, die auf Umbau, Sanierung oder Abriss hindeuten
+  var CHG = /umbau|umgebaut|umgenutzt|umnutzung|nachnutzung|saniert|sanierung|renoviert|renovierung|abriss|rückbau|zurückgebaut|neubau|baustelle|bauarbeiten|wieder ?(er|ge)?öffnet|wiedereröffn|wieder in betrieb|renovat|redevelop|refurbish|under construction|converted/i;
+  var GONE = /abgerissen|abgetragen|nicht mehr vorhanden|existiert nicht mehr|demolished|torn down/i;
+  // Kleine Läden und Lokale: mit disused: steht nur das Ladenlokal leer, das Haus ist meist in Betrieb
+  var SMALLA = set('bank pharmacy cafe restaurant fast_food ice_cream bar pub post_office doctors dentist veterinary internet_cafe ' +
+    'driving_school car_rental bureau_de_change money_transfer');
+
   var LAB = {
     military: { bunker: 'Bunker', barracks: 'Kaserne', airfield: 'Militärflugplatz', range: 'Schießstand',
       training_area: 'Truppenübungsplatz', ammunition: 'Munitionsdepot', naval_base: 'Marinestützpunkt', base: 'Militärbasis',
@@ -1014,7 +1040,7 @@ var LR = (function () {
       control_tower: 'Kontrollturm', heliport: 'Hubschrauberlandeplatz' },
     amenity: { hospital: 'Krankenhaus', clinic: 'Klinik', doctors: 'Arztpraxis', school: 'Schule', kindergarten: 'Kindergarten',
       university: 'Uni-Gebäude', college: 'Hochschule', cinema: 'Kino', theatre: 'Theater', nightclub: 'Disco', pub: 'Kneipe',
-      bar: 'Bar', restaurant: 'Restaurant', cafe: 'Café', fast_food: 'Imbiss', biergarten: 'Biergarten',
+      bar: 'Bar', restaurant: 'Restaurant', cafe: 'Café', fast_food: 'Imbiss', biergarten: 'Biergarten', ice_cream: 'Eisdiele',
       place_of_worship: 'Kirche', monastery: 'Kloster', prison: 'Gefängnis', police: 'Polizeiwache', fire_station: 'Feuerwache',
       townhall: 'Rathaus', community_centre: 'Gemeindezentrum', social_facility: 'Heim', nursing_home: 'Pflegeheim',
       post_office: 'Postamt', bank: 'Bankfiliale', fuel: 'Tankstelle', swimming_pool: 'Schwimmbad', public_bath: 'Badeanstalt',
@@ -1095,7 +1121,7 @@ var LR = (function () {
     ];
     if (opt.names) L.push('wr["name"~"(^|[ (/-])(ehem[.]|ehemalig)",i]');
     if (opt.brown) L.push('wr["landuse"="brownfield"]');
-    return '[out:json][timeout:25][maxsize:268435456][bbox:' + B + '];\n(\n  ' + L.join(';\n  ') + ';\n);\nout body bb qt;';
+    return '[out:json][timeout:25][maxsize:268435456][bbox:' + B + '];\n(\n  ' + L.join(';\n  ') + ';\n);\nout meta bb qt;';
   }
 
   // Öffentliche Overpass-Server: der zuletzt erfolgreiche kommt zuerst dran, jeder bekommt ein Zeitlimit
@@ -1158,8 +1184,9 @@ var LR = (function () {
     return null;
   }
 
-  function valid(w, area) {
+  function valid(w, area, t) {
     var k = w.k, v = w.v;
+    if (t && t.indoor && t.indoor !== 'no') return false; // leerer Laden o. Ä. in einem Gebäude, das noch in Betrieb ist
     if (DROPV[k] && DROPV[k][v]) return false;
     if (KEEPV[k] && !KEEPV[k][v]) return false;
     if (k === 'shop' && !(area >= 600)) return false;
@@ -1197,6 +1224,8 @@ var LR = (function () {
     if (w.p === 'ruins' || t.building === 'ruins' || (t.ruins && t.ruins !== 'no') || t.historic === 'ruins' ||
       t['ruins:building'] || /ruin|collapsed/.test(bc) || t.building === 'collapsed') return 'Ruine';
     if (w.p === 'abandoned' || t.abandoned === 'yes' || t.building === 'abandoned' || t['abandoned:building']) return 'verlassen';
+    if ((w.p === 'disused' || (!w.p && t.disused === 'yes')) &&
+      (w.k === 'shop' || w.k === 'office' || w.k === 'craft' || (w.k === 'amenity' && SMALLA[w.v]))) return 'Leerstand';
     if (w.p === 'disused' || t.disused === 'yes' || t['disused:building']) return 'stillgelegt';
     if (/derelict|deteriorat|poor|bad/.test(bc) || t.building === 'damaged') return 'baufällig';
     if (w.k === 'landuse' && w.v === 'brownfield') return 'Brache';
@@ -1215,12 +1244,44 @@ var LR = (function () {
 
   function hasPrefix(t, p) { for (var k in t) if (k.indexOf(p) === 0) return true; return false; }
 
+  // Früherer Name, auch wenn er nur mit Lifecycle-Präfix eingetragen ist (abandoned:name=Kellogg's)
+  function oldName(t) {
+    var n = t.old_name || t['abandoned:name'] || t['disused:name'] || t['was:name'] || t['ruins:name'] || t['historic:name'];
+    return n ? String(n).split(';').join(' / ') : null;
+  }
+  // Notizen ohne verneinte Stellen („nicht saniert“, „unsaniert“)
+  function noteOf(t) {
+    return [t.note, t['note:de'], t.description, t['description:de'], t.fixme, t.FIXME].filter(Boolean).join(' ')
+      .replace(/(nicht|kein\w*)\s+(\S+\s+)?(saniert|renoviert|abgerissen|umgebaut|umgenutzt)/gi, '')
+      .replace(/un(saniert|renoviert)/gi, '');
+  }
+
+  // Ist dieses Objekt eine aktive Nutzung (Laden, Firma, Schule, Hotel …) oder eine Baustelle?
+  // own: das gefundene Objekt selbst prüfen, dann zählen Baustelle/Wohngebiet/Sehenswürdigkeit nicht
+  function actOf(t, own) {
+    if (!t || t.disused === 'yes' || t.abandoned === 'yes' || (t.ruins && t.ruins !== 'no') || t.historic === 'ruins' ||
+      /^(ruins|abandoned|collapsed|damaged)$/.test(t.building || '')) return null;
+    var nm = t.name || t.brand || null, v;
+    if (!own && (t.building === 'construction' || t.landuse === 'construction')) return { bau: 1, l: 'Baustelle', n: t.name || null };
+    if (!own && t.landuse === 'residential') return { wohn: 1, l: 'Wohngebiet', n: t.name || null };
+    if ((v = t.shop) && !/^(vacant|no|disused|abandoned|closed|empty)$/.test(v)) return { l: LAB.shop[v] || 'Laden', n: nm, v: v };
+    if ((v = t.amenity) && ACT.amenity[v]) return { l: LAB.amenity[v] || 'Einrichtung', n: nm, v: v };
+    if ((v = t.tourism) && ACT.tourism[v] && !(own && v === 'attraction')) return { l: LAB.tourism[v] || 'Sehenswürdigkeit', n: nm, v: v };
+    if ((v = t.leisure) && ACT.leisure[v]) return { l: LAB.leisure[v] || 'Freizeitanlage', n: nm, v: v };
+    if ((v = t.office) && !/^(vacant|no|disused)$/.test(v)) return { l: v === 'company' ? 'Firma' : 'Büro', n: nm, v: v };
+    if ((v = t.craft)) return { l: LAB.craft[v] || 'Handwerksbetrieb', n: nm, v: v };
+    if ((v = t.healthcare)) return { l: LAB.amenity[v] || 'Praxis', n: nm, v: v };
+    if ((v = t.club)) return { l: 'Verein', n: nm, v: v };
+    return null;
+  }
+
   function scoreOf(t, it) {
     var s = 50, why = [];
     function add(n, txt) { s += n; why.push([n, txt]); }
-    if (!t.name && !t.old_name) add(15, 'kein Name, schwer zu googeln');
+    if (!t.name && !it.old) add(15, 'kein Name, schwer zu googeln');
     else if (!t.name) add(5, 'nur ein alter Name bekannt');
-    if (it.state && it.state !== 'ehemalig' && it.state !== 'Brache') add(8, 'in OSM als ' + it.state + ' markiert');
+    if (it.state && !/^(ehemalig|Brache|Leerstand)$/.test(it.state)) add(8, 'in OSM als ' + it.state + ' markiert');
+    if (it.state === 'Leerstand') add(-10, 'nur Leerstand: Laden, Lokal oder Büro ist zu, meist kein Lost Place');
     if (it.state === 'ehemalig') add(-10, 'nur der Name deutet darauf hin, evtl. umgenutzt');
     if (it.state === 'Brache') add(-10, 'Brachfläche, oft nur noch Wiese');
     if (it.len >= 150) add(10, 'Tunnel, ' + fmtArea(it));
@@ -1234,6 +1295,13 @@ var LR = (function () {
     if (t.heritage || t['heritage:operator']) add(-5, 'Baudenkmal, also dokumentiert');
     if (t.castle_type || t.historic === 'castle' || /(^|[\s-])(burg|schloss|festung)/i.test(t.name || '')) add(-10, 'Burg oder Schloss, klassisches Ausflugsziel');
     if (t.image || t.wikimedia_commons) add(-5, 'Foto verlinkt');
+    // Hinweise, dass es gar kein Lost Place mehr ist
+    var nt = noteOf(t);
+    if (GONE.test(nt)) add(-50, 'laut OSM-Notiz abgerissen');
+    else if (CHG.test(nt)) add(-25, 'laut OSM-Notiz Umbau, Sanierung oder Abriss geplant');
+    if (t.building === 'construction' || t.landuse === 'construction') add(-25, 'in OSM als Baustelle eingetragen');
+    var now = it.p ? actOf(t, true) : null;
+    if (now && now.v !== it.v) add(-45, 'in OSM schon mit neuer Nutzung eingetragen: ' + now.l);
     return { score: Math.max(0, Math.min(100, Math.round(s))), why: why };
   }
 
@@ -1254,13 +1322,15 @@ var LR = (function () {
       if (w.k === 'railway' && w.v === 'tunnel') len = g.len; else area = g.area;
     } else if (el.center) { lat = el.center.lat; lon = el.center.lon; }
     if (lat == null || lon == null) return null;
-    if (!valid(w, area)) return null;
-    var it = { id: el.type.charAt(0) + el.id, type: el.type, osm: el.id, lat: lat, lon: lon, b: b, tags: t, k: w.k, v: w.v,
-      area: area == null ? null : Math.round(area), len: len == null ? null : Math.round(len), name: t.name || null };
+    if (!valid(w, area, t)) return null;
+    var it = { id: el.type.charAt(0) + el.id, type: el.type, osm: el.id, lat: lat, lon: lon, b: b, tags: t, k: w.k, v: w.v, p: w.p,
+      area: area == null ? null : Math.round(area), len: len == null ? null : Math.round(len), name: t.name || null,
+      old: oldName(t), ts: el.timestamp || null };
     it.label = labelOf(w, t, area);
     it.cat = catOf(w, t);
     it.state = stateOf(w, t);
-    var sc = scoreOf(t, it); it.score = sc.score; it.why = sc.why;
+    // score0/why0: Grundwert ohne Gegencheck, damit der Gegencheck mehrfach angewendet werden kann
+    var sc = scoreOf(t, it); it.score = it.score0 = sc.score; it.why = it.why0 = sc.why;
     return it;
   }
 
@@ -1282,7 +1352,8 @@ var LR = (function () {
         for (var j = 0; j < cell.length; j++) {
           var w = cell[j], b = w.b;
           if (n.lat >= b.minlat && n.lat <= b.maxlat && n.lon >= b.minlon && n.lon <= b.maxlon) {
-            var re = classify({ type: w.type, id: w.osm, bounds: b, tags: Object.assign({}, w.tags, n.tags) });
+            var re = classify({ type: w.type, id: w.osm, bounds: b, tags: Object.assign({}, w.tags, n.tags),
+              timestamp: [w.ts, n.ts].filter(Boolean).sort().pop() });
             if (re) Object.assign(w, re);
             drop[n.id] = 1;
             return;
@@ -1291,6 +1362,120 @@ var LR = (function () {
       }
     });
     return items.filter(function (it) { return !drop[it.id]; });
+  }
+
+  /* ---------- Gegencheck: Was verzeichnet OSM heute auf dem Gelände? ---------- */
+  // Flächen bis 1 km² (keine Tunnel, keine riesigen Übungsplätze) und Punkte (dann im Umkreis von NEAR_M)
+  function checkable(it) {
+    if (it.len) return false;
+    if (it.type === 'node') return true;
+    if (it.area == null || it.area > CHECK_MAX_M2) return false;
+    return it.type === 'way' || /^(multipolygon|boundary)$/.test((it.tags || {}).type || '');
+  }
+
+  function rx(o) { return '"^(' + Object.keys(o).join('|') + ')$"'; }
+  function checkQuery(items) {
+    var w = [], r = [], n = [], q = ['[out:json][timeout:25];'], parts = [];
+    items.forEach(function (it) { (it.type === 'way' ? w : it.type === 'relation' ? r : n).push(it.osm); });
+    function sel(s) {
+      return ['shop', 'office', 'craft', 'healthcare', 'club'].map(function (k) { return 'nwr(' + s + ')[' + k + ']'; })
+        .concat(['amenity', 'tourism', 'leisure'].map(function (k) { return 'nwr(' + s + ')[' + k + '~' + rx(ACT[k]) + ']'; }))
+        .concat(['way(' + s + ')[building=construction]', 'rel(' + s + ')[building=construction]',
+          'way(' + s + ')[landuse~"^(construction|residential)$"]', 'rel(' + s + ')[landuse~"^(construction|residential)$"]'])
+        .join(';\n  ');
+    }
+    if (w.length) q.push('way(id:' + w.join(',') + ')->.w;');
+    if (r.length) q.push('rel(id:' + r.join(',') + ')->.r;');
+    if (w.length || r.length) {
+      var c = (w.length ? '.w;' : '') + (r.length ? '.r;' : '');
+      // Umrisse für die Punkt-in-Fläche-Prüfung, dann die Flächen selbst (geschlossene Wege, äußere Ringe)
+      q.push('(' + c + ')->.c;', '.c out skel geom qt;', '(' + c + (r.length ? 'way(r.r:"outer");' : '') + ')->.o;',
+        '.o map_to_area->.a;', '.a out ids;');
+      parts.push(sel('area.a'));
+    }
+    if (n.length) { q.push('node(id:' + n.join(',') + ')->.p;'); parts.push(sel('around.p:' + NEAR_M)); }
+    q.push('(\n  ' + parts.join(';\n  ') + ';\n)->.x;', 'node.x;out body qt;', '(way.x;rel.x;);out tags center qt;');
+    return q.join('\n');
+  }
+
+  function ringsOf(g) {
+    if (g.type === 'way') return g.geometry ? [g.geometry] : [];
+    return (g.members || []).filter(function (m) { return m.type === 'way' && m.geometry; }).map(function (m) { return m.geometry; });
+  }
+  // Gerade-ungerade-Regel über alle Segmente; funktioniert auch für Ringe aus mehreren Wegen und Innenhöfe
+  function inside(lat, lon, rings) {
+    var c = false;
+    rings.forEach(function (g) {
+      for (var i = 1; i < g.length; i++) {
+        var a = g[i - 1], b = g[i];
+        if (a && b && (a.lat > lat) !== (b.lat > lat) && lon < (b.lon - a.lon) * (lat - a.lat) / (b.lat - a.lat) + a.lon) c = !c;
+      }
+    });
+    return c;
+  }
+
+  function judge(it, found) {
+    var act = found.filter(function (a) { return !a.bau; }).length, bau = found.length - act, ha = (it.area || 0) / 10000, v;
+    if (it.type === 'node') v = act >= 3 ? 'busy' : act ? 'near' : bau ? 'bau' : 'none';
+    else if (act && (ha < 1 || act >= Math.max(2, Math.ceil(ha / 5)))) v = 'reuse';
+    else if (bau) v = 'bau';
+    else v = act ? 'part' : 'none';
+    // Kurzliste: Benanntes zuerst, Baustellen zuletzt, Gleiches zusammengefasst
+    var cnt = {}, ord = [];
+    found.forEach(function (a) {
+      var x = a.n ? (a.n.toLowerCase().indexOf(a.l.toLowerCase()) >= 0 ? a.n : a.l + ' „' + a.n + '“') : a.l;
+      if (!cnt[x]) { cnt[x] = 0; ord.push({ x: x, r: (a.bau ? 2 : 0) + (a.n ? 0 : 1) }); }
+      cnt[x]++;
+    });
+    ord.sort(function (a, b) { return a.r - b.r; });
+    var list = ord.map(function (o) { return (cnt[o.x] > 1 ? cnt[o.x] + '× ' : '') + o.x; });
+    return { v: v, n: act, b: bau, list: list.slice(0, 8), more: Math.max(0, list.length - 8), t: Date.now() };
+  }
+
+  // Antwort auswerten: pro Fund ein Ergebnis. skip: IDs, die selbst Funde sind und nicht als Betrieb zählen
+  function checkRead(items, els, skip) {
+    var geom = {}, ok = {}, feats = [], seen = {}, res = {};
+    (els || []).forEach(function (e) {
+      var id = e.type.charAt(0) + e.id;
+      if (e.type === 'area') { ok[e.id >= 3600000000 ? 'r' + (e.id - 3600000000) : 'w' + (e.id - 2400000000)] = 1; return; }
+      if (e.geometry || e.members) { geom[id] = e; return; }
+      if (!e.tags) { if (e.lat == null && !e.center) ok[id] = 1; return; }
+      if (seen[id] || (skip && skip[id])) return;
+      seen[id] = 1;
+      var a = actOf(e.tags), pt = e.center || e;
+      if (a && pt.lat != null) feats.push({ lat: pt.lat, lon: pt.lon, a: a });
+    });
+    items.forEach(function (it) {
+      var found = [];
+      if (it.type === 'node') {
+        feats.forEach(function (f) { if (!f.a.wohn && dist(it.lat, it.lon, f.lat, f.lon) <= NEAR_M + 5) found.push(f.a); });
+      } else {
+        var g = geom[it.id], b = it.b, rings = g ? ringsOf(g) : [];
+        var done = ok[it.id] || (g && g.members || []).some(function (m) { return m.type === 'way' && ok['w' + m.ref]; });
+        if (!rings.length || !done) { res[it.id] = { v: 'na', n: 0, b: 0, list: [], more: 0, t: Date.now() }; return; }
+        feats.forEach(function (f) {
+          if (b && (f.lat < b.minlat || f.lat > b.maxlat || f.lon < b.minlon || f.lon > b.maxlon)) return;
+          if (inside(f.lat, f.lon, rings)) found.push(f.a);
+        });
+      }
+      res[it.id] = judge(it, found);
+    });
+    return res;
+  }
+
+  // Ergebnis in Score und Begründung einrechnen (immer ausgehend vom Grundwert)
+  function applyCheck(it, c) {
+    var why = (it.why0 || it.why || []).slice(), s = it.score0 != null ? it.score0 : it.score, pt = it.type === 'node';
+    function add(n, txt) { s += n; why.push([n, txt]); }
+    var e = c.n === 1 ? '1 Eintrag' : c.n + ' Einträge';
+    if (c.v === 'reuse') add(-45, 'auf dem Gelände ist laut OSM wieder Betrieb (' + e + ')');
+    else if (c.v === 'part') add(-15, 'teilweise wieder genutzt (' + e + ' auf dem Gelände)');
+    else if (c.v === 'busy') add(-30, 'belebte Lage (' + e + ' im Umkreis von ' + NEAR_M + ' m), eher Leerstand');
+    else if (c.v === 'near') add(-10, 'direkt nebenan ist Betrieb');
+    if (c.b) add(pt ? -10 : -25, pt ? 'Baustelle direkt nebenan' : 'Baustelle auf dem Gelände');
+    it.chk = c; it.why = why; it.score = Math.max(0, Math.min(100, Math.round(s)));
+    if (it.score0 == null) { it.score0 = it.score; it.why0 = why; }
+    return it;
   }
 
   /* ---------- Hilfen ---------- */
@@ -1316,9 +1501,16 @@ var LR = (function () {
     return Math.round(m / 1000) + ' km';
   }
   function tier(s) { return s >= 70 ? 'Geheimtipp' : s >= 45 ? 'Wenig bekannt' : s >= 25 ? 'Bekannt' : 'Touri-Spot'; }
+  var MON = ['Januar', 'Februar', 'März', 'April', 'Mai', 'Juni', 'Juli', 'August', 'September', 'Oktober', 'November', 'Dezember'];
+  // „2019-05-12T10:00:00Z“ oder „2019-05“ → „Mai 2019“
+  function fmtMonth(d) {
+    var m = /^(\d{4})(?:-(\d{2}))?/.exec(d || '');
+    return m ? (m[2] && +m[2] >= 1 && +m[2] <= 12 ? MON[+m[2] - 1] + ' ' : '') + m[1] : null;
+  }
 
-  return { CATS: CATS, ORDER: ORDER, MAX_KM2: MAX_KM2, buildQuery: buildQuery, overpass: overpass, classify: classify,
-    process: process, areaKm2: areaKm2, dist: dist, fmtArea: fmtArea, fmtDist: fmtDist, tier: tier };
+  return { CATS: CATS, ORDER: ORDER, MAX_KM2: MAX_KM2, NEAR_M: NEAR_M, buildQuery: buildQuery, overpass: overpass, classify: classify,
+    process: process, checkable: checkable, checkQuery: checkQuery, checkRead: checkRead, applyCheck: applyCheck,
+    areaKm2: areaKm2, dist: dist, fmtArea: fmtArea, fmtDist: fmtDist, fmtMonth: fmtMonth, tier: tier };
 })();
 if (typeof module !== 'undefined') module.exports = LR;
 
@@ -1329,6 +1521,8 @@ const C = window.LR;
 const $ = s => document.querySelector(s);
 const $$ = s => Array.from(document.querySelectorAll(s));
 const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
+// Anzeigename: Name, sonst Typ mit früherem Namen (Fabrik „Kellogg's“), sonst nur der Typ
+const title = it => it.name || (it.old ? it.label + ' „' + it.old + '“' : it.label);
 const store = {
   get(k, d) { try { const v = localStorage.getItem('lostradar.' + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
   set(k, v) { try { localStorage.setItem('lostradar.' + k, JSON.stringify(v)); } catch (e) {} }
@@ -1456,6 +1650,7 @@ function errText(e) {
 }
 async function scan() {
   if (S.busy) { S.busy.abort(); return; }
+  if (S.chkBusy) S.chkBusy.abort();
   const bb = bboxOf();
   if (C.areaKm2(bb) > C.MAX_KM2) { toast('Ausschnitt zu groß. Bitte näher ranzoomen.'); updPill(); return; }
   hideSugg();
@@ -1473,6 +1668,7 @@ async function scan() {
     else if (!S.items.length) toast('Hier ist in OSM nichts als verlassen eingetragen.');
     apply(true);
     if (!wide() && sheetSt === 'peek') setSheet('half');
+    startCheck();
   } catch (e) {
     if (e && e.name === 'AbortError') toast('Suche abgebrochen.');
     else { S.err = errText(e); if (S.items.length) toast(S.err); }
@@ -1503,14 +1699,14 @@ function counts() {
   if (S.busy) return 'sucht …';
   if (!S.done) return 'noch nicht gesucht';
   const top = S.items.filter(i => i.score >= 70).length;
-  return S.items.length + ' Funde · ' + top + ' Geheimtipps';
+  return S.items.length + ' Funde · ' + top + ' Geheimtipps' + (S.chkBusy ? ' · Gegencheck …' : '');
 }
 function sub(it) {
   const c = map.getCenter();
-  return [it.name ? it.label : null, it.state, C.fmtArea(it), C.fmtDist(C.dist(c.lat, c.lng, it.lat, it.lon))].filter(Boolean).join(' · ');
+  return [it.name ? it.label : null, (it.chk && CHK_SHORT[it.chk.v]) || it.state, C.fmtArea(it), C.fmtDist(C.dist(c.lat, c.lng, it.lat, it.lon))].filter(Boolean).join(' · ');
 }
 const row = it => '<button type="button" class="row" data-id="' + esc(it.id) + '"><i class="dot" style="background:' + C.CATS[it.cat].col + '"></i>' +
-  '<span class="rt"><b>' + esc(it.name || it.label) + '</b><span>' + esc(sub(it)) + '</span></span>' +
+  '<span class="rt"><b>' + esc(title(it)) + '</b><span>' + esc(sub(it)) + '</span></span>' +
   '<em class="sc' + (it.score >= 70 ? ' top' : '') + '" title="Geheimtipp-Score">' + it.score + '</em></button>';
 const legend = () => '<ul class="legend">' + C.ORDER.map(k => '<li><i class="dot" style="background:' + C.CATS[k].col + '"></i>' + C.CATS[k].name + '</li>').join('') + '</ul>';
 function listHTML() {
@@ -1532,8 +1728,8 @@ function favHTML() {
 /* ---------- Detail ---------- */
 const ACCESS = { private: 'privat', no: 'kein Zutritt', permissive: 'geduldet', yes: 'öffentlich', customers: 'nur Kunden', military: 'militärisch', forestry: 'nur Forstwirtschaft', agricultural: 'nur Landwirtschaft', destination: 'nur Anlieger', delivery: 'nur Lieferverkehr' };
 function knownUrl(it) {
-  const g = S.geo[it.id];
-  const q = it.name ? '"' + it.name + '" lost place' : 'lost place ' + it.label + ' ' + ((g && g.city) || '');
+  const g = S.geo[it.id], nm = it.name || (it.old || '').split(' / ')[0], city = (g && g.city) || '';
+  const q = nm ? '"' + nm + '" ' + city + ' lost place' : 'lost place ' + it.label + ' ' + city;
   return 'https://www.google.com/search?q=' + encodeURIComponent(q.trim());
 }
 const STAR = '<svg width="22" height="22" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.6l2.6 5.3 5.8.8-4.2 4.1 1 5.8L12 16.9l-5.2 2.7 1-5.8-4.2-4.1 5.8-.8z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg>';
@@ -1549,7 +1745,7 @@ function detailHTML(it) {
     t.access ? ['Zugang', esc((ACCESS[t.access] || t.access) + ' (laut OSM)')] : null,
     t.start_date ? ['Gebaut', esc(t.start_date)] : null,
     t.end_date ? ['Aufgegeben', esc(t.end_date)] : null,
-    t.old_name ? ['Früher', esc(t.old_name)] : null,
+    it.name && it.old ? ['Früher', esc(it.old)] : null,
     t.operator ? ['Betreiber', esc(t.operator)] : null,
     (t.heritage || t['heritage:operator']) ? ['Denkmal', 'ja'] : null,
     (t.description || t.note) ? ['Notiz', esc(t.description || t.note)] : null
@@ -1559,9 +1755,10 @@ function detailHTML(it) {
   return '<div class="det">' +
     '<button type="button" class="back" data-act="back">' + BACK + (S.tab === 'favs' ? 'Merkliste' : 'Alle Funde') + '</button>' +
     '<div class="kind"><i class="dot" style="background:' + c.col + '"></i>' + esc(c.name) + '</div>' +
-    '<div class="ttl"><div><h2>' + esc(it.name || it.label) + '</h2><p class="sub">' + esc([it.name ? it.label : null, it.state || 'Zustand unbekannt'].filter(Boolean).join(' · ')) + '</p></div>' +
+    '<div class="ttl"><div><h2>' + esc(title(it)) + '</h2><p class="sub">' + esc([it.name ? it.label : null, it.state || 'Zustand unbekannt'].filter(Boolean).join(' · ')) + '</p></div>' +
     '<button type="button" class="star" data-act="fav" aria-pressed="' + fav + '" aria-label="' + (fav ? 'Aus Merkliste entfernen' : 'Merken') + '">' + STAR + '</button></div>' +
-    '<div class="meter"><em class="sc' + (it.score >= 70 ? ' top' : '') + '">' + it.score + '</em><div><strong>' + C.tier(it.score) + '</strong><div class="bar"><i style="width:' + it.score + '%"></i></div></div></div>' +
+    '<div class="meter"><em class="sc' + (it.score >= 70 ? ' top' : '') + '">' + it.score + '</em><div><strong>' + (it.chk && CHK_FLAG[it.chk.v] ? 'Eher kein Lost Place' : C.tier(it.score)) + '</strong><div class="bar"><i style="width:' + it.score + '%"></i></div></div></div>' +
+    chkHTML(it) +
     '<dl class="facts">' + facts.map(f => '<dt>' + f[0] + '</dt><dd>' + f[1] + '</dd>').join('') + '</dl>' +
     '<div class="links">' +
       '<button type="button" class="lnk main" data-act="sat">Luftbild hier</button>' +
@@ -1575,6 +1772,72 @@ function detailHTML(it) {
     '<details class="tags"><summary>Alle OSM-Tags (' + keys.length + ')</summary><div class="scroll"><table>' + keys.map(k => '<tr><td>' + esc(k) + '</td><td>' + esc(t[k]) + '</td></tr>').join('') + '</table></div></details>' +
     '</div>';
 }
+/* ---------- Gegencheck ---------- */
+// Nach jeder Suche fragt die App im Hintergrund ab, was OSM heute auf den Flächen der Funde verzeichnet:
+// Läden, Firmen, Schulen, Hotels, Baustellen. Ist dort wieder Betrieb, rutscht der Ort im Score nach unten.
+const CHK_SHORT = { reuse: 'wohl umgenutzt', part: 'teils genutzt', bau: 'Baustelle', busy: 'belebte Lage' };
+const CHK_FLAG = { reuse: 1, bau: 1, busy: 1 };
+function chkHTML(it) {
+  const c = it.chk, t = it.tags || {}, pt = it.type === 'node';
+  const there = pt ? 'Im Umkreis von ' + C.NEAR_M + ' m' : 'Auf dem Gelände';
+  const what = c && c.list && c.list.length ? esc(c.list.join(', ')) + (c.more ? ' und ' + c.more + ' weitere' : '') : '';
+  let cls = '', head, txt = '';
+  if (!c) {
+    if (it.chkErr) { head = 'Gegencheck hat nicht geklappt'; txt = 'Die OSM-Server sind gerade ausgelastet. <button type="button" class="mini" data-act="recheck">Nochmal prüfen</button>'; }
+    else if (!C.checkable(it)) { head = 'Kein Gegencheck möglich'; txt = it.len ? 'Bei Tunneln klappt das nicht.' : 'Die Fläche ist dafür zu groß.'; }
+    else { head = 'Gegencheck läuft …'; txt = 'Die App schaut nach, was OpenStreetMap heute ' + (pt ? 'direkt drumherum' : 'auf dem Gelände') + ' verzeichnet.'; }
+  } else if (c.v === 'reuse') { cls = 'warn'; head = 'Wohl umgenutzt'; txt = there + ' verzeichnet OSM heute: ' + what + '.'; }
+  else if (c.v === 'part') { cls = 'warn'; head = 'Teilweise wieder genutzt'; txt = there + ' verzeichnet OSM: ' + what + '. Der Rest kann noch leer stehen.'; }
+  else if (c.v === 'bau') { cls = 'warn'; head = pt ? 'Baustelle nebenan' : 'Baustelle'; txt = there + ' ist eine Baustelle eingetragen. Wahrscheinlich wird gerade umgebaut oder abgerissen.'; }
+  else if (c.v === 'busy') { cls = 'warn'; head = 'Belebte Lage'; txt = there + ' verzeichnet OSM: ' + what + '. Eher ein leerer Laden als ein Lost Place.'; }
+  else if (c.v === 'near') { head = 'Betrieb nebenan'; txt = there + ' verzeichnet OSM: ' + what + '.'; }
+  else if (c.v === 'none') { cls = 'ok'; head = 'Nichts Aktuelles eingetragen'; txt = there + ' kennt OSM keine Läden, Firmen oder Baustellen. Gutes Zeichen, aber kein Beweis, denn OSM hinkt oft hinterher.'; }
+  else { head = 'Kein Gegencheck möglich'; txt = 'Die Umrisse sind in OSM nicht als geschlossene Fläche erfasst.'; }
+  // Wie alt ist der Eintrag? check_date setzen Mapper, wenn sie vor Ort nachgesehen haben
+  const cd = t.check_date || t['survey:date'] || null, cdm = cd && C.fmtMonth(cd), tsm = it.ts && C.fmtMonth(it.ts);
+  const age = [tsm ? 'OSM-Eintrag zuletzt geändert: ' + tsm : null, cdm ? 'vor Ort bestätigt: ' + cdm : null].filter(Boolean);
+  const last = Math.max(+String(it.ts || '').slice(0, 4) || 0, +String(cd || '').slice(0, 4) || 0);
+  if (last && new Date().getFullYear() - last >= 6) age.push('seit Jahren unverändert, also lieber erst im Luftbild nachsehen');
+  return '<div class="gcheck ' + cls + '"><b>' + head + '</b>' + (txt ? '<p>' + txt + '</p>' : '') +
+    (age.length ? '<p class="age">' + esc(age.join(' · ')) + '</p>' : '') + '</div>';
+}
+function startCheck() {
+  const list = S.items.filter(it => !it.chk && it.score >= 45 && C.checkable(it)).sort((a, b) => b.score - a.score).slice(0, 400);
+  if (list.length) runCheck(list, true);
+}
+async function runCheck(list, batch) {
+  const ctl = new AbortController();
+  if (batch) S.chkBusy = ctl;
+  else { if (S.chkOne) S.chkOne.abort(); S.chkOne = ctl; }
+  list.forEach(it => { it.chkRun = true; it.chkErr = false; });
+  if (batch) $('#count').textContent = counts();
+  let hit = 0;
+  try {
+    const j = await C.overpass(C.checkQuery(list), ctl.signal);
+    const skip = {};
+    S.items.concat(list).forEach(i => { skip[i.id] = 1; });
+    const res = C.checkRead(list, j.elements || [], skip);
+    for (const it of list) {
+      C.applyCheck(it, res[it.id]);
+      if (CHK_FLAG[it.chk.v]) hit++;
+      const f = S.favs[it.id];
+      if (f && f !== it) Object.assign(f, { chk: it.chk, score: it.score, why: it.why });
+    }
+    if (list.some(it => S.favs[it.id])) store.set('favs', S.favs);
+  } catch (e) {
+    if (!(e && e.name === 'AbortError')) list.forEach(it => { it.chkErr = true; });
+  } finally {
+    list.forEach(it => { it.chkRun = false; });
+    if (S.chkBusy === ctl) S.chkBusy = null;
+    if (S.chkOne === ctl) S.chkOne = null;
+  }
+  if (ctl.signal.aborted) return;
+  const keep = body.scrollTop;
+  apply();
+  body.scrollTop = keep;
+  if (batch && hit) toast('Gegencheck: ' + (hit === 1 ? '1 Ort ist' : hit + ' Orte sind') + ' laut OSM wieder in Betrieb, Baustelle oder nur Leerstand und ' + (hit === 1 ? 'rutscht' : 'rutschen') + ' nach unten.');
+}
+
 async function revgeo(it) {
   if (S.geo[it.id]) return;
   S.geo[it.id] = { txt: 'wird ermittelt …', city: '' };
@@ -1629,11 +1892,12 @@ function select(id, fromList) {
   if (!wide() && sheetSt === 'peek') setSheet('half');
   focusOn(it, fromList ? Math.max(map.getZoom(), 16) : null);
   revgeo(it);
+  if (!it.chk && !it.chkRun && C.checkable(it)) runCheck([it], false);
 }
 function unselect() { S.sel = null; map.removeLayer(selMk); render(true); }
 function toggleFav(it) {
   if (S.favs[it.id]) delete S.favs[it.id];
-  else S.favs[it.id] = { id: it.id, type: it.type, osm: it.osm, lat: it.lat, lon: it.lon, k: it.k, v: it.v, label: it.label, name: it.name, cat: it.cat, state: it.state, area: it.area, len: it.len, score: it.score, why: it.why, tags: it.tags, t: Date.now() };
+  else S.favs[it.id] = { id: it.id, type: it.type, osm: it.osm, lat: it.lat, lon: it.lon, b: it.b, k: it.k, v: it.v, p: it.p, label: it.label, name: it.name, old: it.old, cat: it.cat, state: it.state, area: it.area, len: it.len, score: it.score, why: it.why, score0: it.score0, why0: it.why0, chk: it.chk, ts: it.ts, tags: it.tags, t: Date.now() };
   store.set('favs', S.favs);
   const keep = body.scrollTop; render(); body.scrollTop = keep;
   toast(S.favs[it.id] ? 'Gemerkt' : 'Aus der Merkliste entfernt');
@@ -1649,7 +1913,7 @@ async function copy(txt, ok) {
 }
 const xml = s => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
 function gpx() {
-  const w = Object.values(S.favs).map(f => '  <wpt lat="' + f.lat + '" lon="' + f.lon + '"><name>' + xml(f.name || f.label) + '</name><desc>' +
+  const w = Object.values(S.favs).map(f => '  <wpt lat="' + f.lat + '" lon="' + f.lon + '"><name>' + xml(title(f)) + '</name><desc>' +
     xml([f.label, f.state, C.fmtArea(f), 'https://www.openstreetmap.org/' + f.type + '/' + f.osm].filter(Boolean).join(' · ')) + '</desc></wpt>').join('\n');
   const s = '<?xml version="1.0" encoding="UTF-8"?>\n<gpx version="1.1" creator="Lost Radar" xmlns="http://www.topografix.com/GPX/1/1">\n' + w + '\n</gpx>\n';
   try {
@@ -1669,13 +1933,14 @@ body.addEventListener('click', e => {
   const act = a.dataset.act, it = S.sel;
   if (act === 'back') unselect();
   else if (act === 'fav' && it) toggleFav(it);
+  else if (act === 'recheck' && it) { runCheck([it], false); const keep = body.scrollTop; render(); body.scrollTop = keep; }
   else if (act === 'copy' && it) copy(it.lat.toFixed(5) + ', ' + it.lon.toFixed(5), 'Koordinaten kopiert');
   else if (act === 'sat' && it) { setBase('sat'); focusOn(it, 18); }
   else if (act === 'more') { S.limit += 150; render(); }
   else if (act === 'retry') scan();
   else if (act === 'filters') openFilters();
   else if (act === 'gpx') gpx();
-  else if (act === 'copyall') copy(Object.values(S.favs).map(f => (f.name || f.label) + ' – ' + f.lat.toFixed(5) + ', ' + f.lon.toFixed(5) + ' – https://www.openstreetmap.org/' + f.type + '/' + f.osm).join('\n'), 'Merkliste kopiert');
+  else if (act === 'copyall') copy(Object.values(S.favs).map(f => title(f) + ' – ' + f.lat.toFixed(5) + ', ' + f.lon.toFixed(5) + ' – https://www.openstreetmap.org/' + f.type + '/' + f.osm).join('\n'), 'Merkliste kopiert');
 });
 $('#t-list').addEventListener('click', () => { S.tab = 'list'; S.sel = null; map.removeLayer(selMk); render(true); });
 $('#t-favs').addEventListener('click', () => { S.tab = 'favs'; S.sel = null; map.removeLayer(selMk); render(true); });
