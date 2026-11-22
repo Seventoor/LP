@@ -812,6 +812,18 @@ button{cursor:pointer}
 .gcheck.warn{background:color-mix(in srgb,var(--warn) 12%,var(--panel))}
 .gcheck.warn b{color:var(--warn)}
 .gcheck.ok b{color:var(--moss)}
+.gcheck .src{margin:6px 0 0;padding:0;list-style:none;font-size:14px}
+.gcheck .src li{padding:3px 0;overflow-wrap:anywhere}
+.gcheck .src a{color:var(--moss);font-weight:500}
+.gcheck .src small{color:var(--muted)}
+.gcheck .act{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:8px;margin-top:10px}
+.gcheck .act .mini{margin:0}
+.gcheck .act small{color:var(--muted);font-size:13px}
+.gcheck .act .lnk{flex:1;height:42px}
+.keyrow{display:flex;gap:8px;margin-top:10px}
+.keyrow input{flex:1;height:44px;padding:0 12px;border:1.5px solid var(--line);border-radius:12px;background:var(--panel);font-size:16px}
+.keyrow .mini{height:44px;margin:0}
+#faimodel{margin-top:8px}
 .tags{margin-top:16px;font-size:14px}
 .tags summary{cursor:pointer;color:var(--muted);padding:6px 0}
 .scroll{overflow-x:auto}
@@ -930,6 +942,13 @@ button{cursor:pointer}
       <h4>Suche erweitern <span>· gilt ab der nächsten Suche</span></h4>
       <label class="chk"><input type="checkbox" id="fnames"><span>Orte mit „ehemalig“ im Namen<small>Findet mehr, aber auch längst Umgenutztes. Macht die Suche etwas langsamer.</small></span></label>
       <label class="chk"><input type="checkbox" id="fbrown"><span>Brachflächen<small>Ungenutzte Industrie- und Gewerbeflächen, oft nur noch Wiese.</small></span></label>
+      <h4 id="kih">KI-Check <span>· optional</span></h4>
+      <p class="hint">Eine KI sucht im Web, ob ein Ort noch leer steht oder längst umgebaut ist. Das läuft über deinen eigenen API-Schlüssel von Anthropic (console.anthropic.com, dort am besten ein Ausgabenlimit setzen) und kostet pro Ort ein paar Cent bis etwa einen halben Euro. Der Schlüssel bleibt in diesem Browser gespeichert und geht nur an Anthropic.</p>
+      <div class="keyrow"><input id="aikey" type="password" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="API-Schlüssel (sk-ant-…)" aria-label="API-Schlüssel von Anthropic"><button type="button" class="mini" id="aikeydel">Löschen</button></div>
+      <div class="seg" id="faimodel" role="group" aria-label="KI-Modell">
+        <button type="button" data-v="claude-opus-5-5">Opus 5.5 (gründlich)</button>
+        <button type="button" data-v="claude-sonnet-5-5">Sonnet 5.5 (günstiger)</button>
+      </div>
       <div class="note">
         <b>Bevor du losziehst</b>
         <p>Die Daten kommen live aus OpenStreetMap und können veraltet sein: Manches ist längst abgerissen oder saniert, also erst im Luftbild prüfen.</p>
@@ -1464,19 +1483,163 @@ var LR = (function () {
     return res;
   }
 
-  // Ergebnis in Score und Begründung einrechnen (immer ausgehend vom Grundwert)
-  function applyCheck(it, c) {
-    var why = (it.why0 || it.why || []).slice(), s = it.score0 != null ? it.score0 : it.score, pt = it.type === 'node';
+  // Score immer neu aus Grundwert (score0/why0), Gegencheck (it.chk) und KI-Check (it.ai) zusammensetzen
+  function rescore(it) {
+    if (it.score0 == null) { it.score0 = it.score; it.why0 = (it.why || []).slice(); } // alte Merklisten-Einträge
+    var why = it.why0.slice(), s = it.score0, c = it.chk, ai = it.ai, pt = it.type === 'node';
     function add(n, txt) { s += n; why.push([n, txt]); }
-    var e = c.n === 1 ? '1 Eintrag' : c.n + ' Einträge';
-    if (c.v === 'reuse') add(-45, 'auf dem Gelände ist laut OSM wieder Betrieb (' + e + ')');
-    else if (c.v === 'part') add(-15, 'teilweise wieder genutzt (' + e + ' auf dem Gelände)');
-    else if (c.v === 'busy') add(-30, 'belebte Lage (' + e + ' im Umkreis von ' + NEAR_M + ' m), eher Leerstand');
-    else if (c.v === 'near') add(-10, 'direkt nebenan ist Betrieb');
-    if (c.b) add(pt ? -10 : -25, pt ? 'Baustelle direkt nebenan' : 'Baustelle auf dem Gelände');
-    it.chk = c; it.why = why; it.score = Math.max(0, Math.min(100, Math.round(s)));
-    if (it.score0 == null) { it.score0 = it.score; it.why0 = why; }
+    // Eine sichere KI-Recherche ist aktueller als OSM, dann zählt der Gegencheck nicht
+    var aiSure = !!(ai && AI_STATUS[ai.s] && ai.s !== 'unklar' && ai.c !== 'niedrig');
+    if (c && aiSure && (c.n || c.b)) add(0, 'Gegencheck nicht gewertet, die KI-Recherche ist aktueller');
+    else if (c) {
+      var e = c.n === 1 ? '1 Eintrag' : c.n + ' Einträge';
+      if (c.v === 'reuse') add(-45, 'auf dem Gelände ist laut OSM wieder Betrieb (' + e + ')');
+      else if (c.v === 'part') add(-15, 'teilweise wieder genutzt (' + e + ' auf dem Gelände)');
+      else if (c.v === 'busy') add(-30, 'belebte Lage (' + e + ' im Umkreis von ' + NEAR_M + ' m), eher Leerstand');
+      else if (c.v === 'near') add(-10, 'direkt nebenan ist Betrieb');
+      if (c.b) add(pt ? -10 : -25, pt ? 'Baustelle direkt nebenan' : 'Baustelle auf dem Gelände');
+    }
+    if (ai) {
+      var st = AI_STATUS[ai.s], k = AI_KNOWN[ai.b];
+      if (st && st.p) add(Math.round(st.p * (ai.c === 'niedrig' ? 0.5 : 1)), 'KI: ' + st.why);
+      if (k) add(k[0], 'KI: ' + k[1]);
+    }
+    it.why = why; it.score = Math.max(0, Math.min(100, Math.round(s)));
     return it;
+  }
+  function applyCheck(it, c) { it.chk = c; return rescore(it); }
+  function applyAI(it, a) { it.ai = a; return rescore(it); }
+
+  /* ---------- KI-Check: Websuche über die Claude-API ---------- */
+  // Preise in Dollar pro 1 Mio. Tokens (Stand November 2026), Websuche 10 $ pro 1.000 Suchen
+  var AI_MODELS = {
+    'claude-opus-5-5': { name: 'Claude Opus 5.5', inp: 4, out: 20 },
+    'claude-sonnet-5-5': { name: 'Claude Sonnet 5.5', inp: 2, out: 10 }
+  };
+  var AI_DEFAULT = 'claude-opus-5-5';
+  // l: Überschrift, s: Kurzform für die Liste, p/why: Score
+  var AI_STATUS = {
+    verlassen: { l: 'Steht noch leer', s: 'KI: steht leer', p: 5, why: 'laut Websuche weiter verlassen' },
+    teilweise_genutzt: { l: 'Teilweise wieder genutzt', s: 'KI: teils genutzt', p: -15, why: 'laut Websuche teilweise wieder genutzt' },
+    umgenutzt: { l: 'Umgenutzt', s: 'KI: umgenutzt', p: -45, why: 'laut Websuche umgenutzt, saniert oder neu bebaut' },
+    umbau: { l: 'Wird gerade umgebaut', s: 'KI: Umbau', p: -25, why: 'laut Websuche läuft Umbau oder Abriss' },
+    abgerissen: { l: 'Abgerissen', s: 'KI: abgerissen', p: -60, why: 'laut Websuche abgerissen' },
+    unklar: { l: 'Nichts Eindeutiges gefunden', s: null, p: 0, why: '' }
+  };
+  var AI_KNOWN = {
+    kaum: [5, 'kaum Berichte online'],
+    bekannt: [-10, 'als Lost Place bekannt, es gibt Berichte online'],
+    sehr_bekannt: [-20, 'als Lost Place sehr bekannt, viele Berichte und Videos']
+  };
+  var AI_SYSTEM = [
+    'Du arbeitest für die App „Lost Radar“. Sie findet in OpenStreetMap (OSM) Orte, die dort als verlassen, stillgelegt oder Ruine eingetragen sind. ' +
+    'OSM ist oft Jahre alt: Viele dieser Orte sind längst umgebaut, abgerissen, saniert oder wieder genutzt, etwa als Gewerbegebiet, Wohnungen oder Eventlocation. ' +
+    'Deine Aufgabe ist herauszufinden, was dort heute ist, damit niemand umsonst hinfährt.',
+    '',
+    'So gehst du vor:',
+    '- Suche im Web nach dem aktuellen Stand: Lokalnachrichten, Seiten der Gemeinde, Bebauungspläne, Immobilienangebote, Firmen und Gastronomie an der Adresse, Berichte von Lost-Place-Fans mit Datum.',
+    '- Achte auf das Datum der Quellen. Neuere Informationen zählen mehr als ältere.',
+    '- Verwechsle den Ort nicht mit gleichnamigen Orten anderswo. Gleiche Adresse, Gemeinde und Art des Gebäudes ab.',
+    '- Schätze auch ein, wie bekannt der Ort in der Lost-Place-Szene ist.',
+    '- Findest du nichts Belastbares, melde status „unklar“ und rate nicht.',
+    '',
+    'Melde das Ergebnis am Ende genau einmal mit dem Werkzeug ergebnis_melden. Schreib davor keinen langen Bericht.'
+  ].join('\n');
+  var AI_TOOL = {
+    name: 'ergebnis_melden',
+    description: 'Meldet das Ergebnis der Recherche an die App. Genau einmal aufrufen, am Ende, nach der Websuche.',
+    strict: true,
+    input_schema: {
+      type: 'object',
+      properties: {
+        status: { type: 'string', enum: Object.keys(AI_STATUS),
+          description: 'Zustand heute. verlassen: steht weiter leer oder verfällt. teilweise_genutzt: Teile sind wieder in Betrieb. ' +
+            'umgenutzt: wieder genutzt, saniert oder neu bebaut. umbau: Umbau, Sanierung oder Abriss läuft gerade. ' +
+            'abgerissen: nicht mehr vorhanden. unklar: nichts Belastbares gefunden.' },
+        sicherheit: { type: 'string', enum: ['hoch', 'mittel', 'niedrig'], description: 'Wie sicher das Ergebnis ist.' },
+        bekanntheit: { type: 'string', enum: Object.keys(AI_KNOWN),
+          description: 'Wie bekannt der Ort als Lost Place online ist: Urbex-Berichte, Fotos, Videos, Lost-Place-Listen.' },
+        stand: { type: 'string', description: 'Datum der jüngsten verlässlichen Information, etwa „2024“ oder „März 2025“. Leer, wenn unbekannt.' },
+        zusammenfassung: { type: 'string', description: 'Zwei bis drei kurze Sätze auf Deutsch, locker, ohne Emojis: Was ist dort heute, und woher weißt du das?' },
+        quellen: { type: 'array', description: 'Bis zu vier Seiten aus der Websuche, auf die sich das Ergebnis stützt.',
+          items: { type: 'object', properties: { url: { type: 'string' }, titel: { type: 'string' } }, required: ['url', 'titel'], additionalProperties: false } }
+      },
+      required: ['status', 'sicherheit', 'bekanntheit', 'stand', 'zusammenfassung', 'quellen'],
+      additionalProperties: false
+    }
+  };
+  // Tags, die für die Recherche nichts bringen
+  var AI_SKIPTAG = /^(source|building:(levels|material|colour|part)|roof|height|min_height|wheelchair|ref:|lacounty|tiger|gnis|import|fixme:|survey)/;
+
+  function aiPrompt(it, ctx) {
+    var t = it.tags || {}, L = [], a = fmtArea(it);
+    L.push('Ort: ' + (it.name || (it.old ? it.label + ' „' + it.old + '“' : it.label)));
+    L.push('Art laut OSM: ' + it.label + (it.state ? ', ' + it.state : ''));
+    if (it.name && it.old) L.push('Früherer Name: ' + it.old);
+    if (ctx.addr) L.push('Adresse: ' + ctx.addr);
+    L.push('Koordinaten: ' + it.lat.toFixed(5) + ', ' + it.lon.toFixed(5));
+    if (a) L.push('Größe: ' + a);
+    if (it.ts) L.push('OSM-Eintrag zuletzt geändert: ' + fmtMonth(it.ts));
+    var tags = Object.keys(t).sort().filter(function (k) { return !AI_SKIPTAG.test(k); }).map(function (k) { return k + '=' + t[k]; }).join('; ');
+    L.push('OSM-Tags: ' + (tags.length > 1500 ? tags.slice(0, 1500) + ' …' : tags));
+    if (ctx.chk) L.push('Was OSM heute auf dem Gelände oder direkt daneben verzeichnet: ' + ctx.chk);
+    L.push('', 'Was ist dort heute?');
+    return L.join('\n');
+  }
+
+  // Anfrage für client.beta.messages.stream(). Refusal-Fallback ist eingeschaltet (fallbacks: 'default')
+  function aiRequest(it, ctx, model) {
+    var loc = { type: 'approximate', country: /^[A-Z]{2}$/.test(ctx.cc || '') ? ctx.cc : 'DE', timezone: 'Europe/Berlin' };
+    if (ctx.city) loc.city = ctx.city;
+    return {
+      model: AI_MODELS[model] ? model : AI_DEFAULT,
+      max_tokens: 16000,
+      betas: ['server-side-fallback-2026-07-01'],
+      fallbacks: 'default',
+      output_config: { effort: 'medium' },
+      system: AI_SYSTEM,
+      tools: [{ type: 'web_search_20260318', name: 'web_search', max_uses: 5, user_location: loc }, AI_TOOL],
+      messages: [{ role: 'user', content: aiPrompt(it, ctx) }]
+    };
+  }
+
+  // Antwort auswerten. msgs: alle Nachrichten des Gesprächs (für Quellen aus früheren Teilantworten)
+  function aiRead(msg, msgs) {
+    var input = null, seen = {}, cites = [];
+    function norm(u) { return String(u || '').replace(/#.*$/, '').replace(/\/$/, ''); }
+    function scan(blocks) {
+      (blocks || []).forEach(function (b) {
+        if (!b || typeof b !== 'object') return;
+        if (b.type === 'web_search_tool_result' && Array.isArray(b.content))
+          b.content.forEach(function (r) { if (r && r.url) seen[norm(r.url)] = r.title || r.url; });
+        if (b.type === 'text' && b.citations) b.citations.forEach(function (c) {
+          if (c && c.url && !cites.some(function (x) { return x.u === norm(c.url); })) cites.push({ u: norm(c.url), t: c.title || c.url });
+          if (c && c.url) seen[norm(c.url)] = c.title || c.url;
+        });
+      });
+    }
+    (msgs || []).forEach(function (m) { if (m.role === 'assistant' && Array.isArray(m.content)) scan(m.content); });
+    scan(msg.content);
+    (msg.content || []).forEach(function (b) { if (b.type === 'tool_use' && b.name === AI_TOOL.name) input = b.input; });
+    if (!input || !AI_STATUS[input.status]) return null;
+    // Nur Quellen, die wirklich aus der Websuche stammen, und nur http(s)
+    var q = (input.quellen || []).filter(function (x) { return x && /^https?:\/\//i.test(x.url || '') && seen[norm(x.url)]; })
+      .map(function (x) { return { u: x.url, t: x.titel || seen[norm(x.url)] }; });
+    if (!q.length) q = cites.filter(function (x) { return /^https?:\/\//i.test(x.u); });
+    return {
+      s: input.status, c: /^(hoch|mittel|niedrig)$/.test(input.sicherheit) ? input.sicherheit : 'niedrig',
+      b: AI_KNOWN[input.bekanntheit] ? input.bekanntheit : null, d: String(input.stand || '').slice(0, 40),
+      z: String(input.zusammenfassung || '').slice(0, 800), q: q.slice(0, 4), t: Date.now()
+    };
+  }
+
+  // Grobe Kosten einer Antwort in Dollar
+  function aiCost(u, model) {
+    var p = AI_MODELS[model] || AI_MODELS[AI_DEFAULT];
+    if (!u) return 0;
+    var inp = (u.input_tokens || 0) + (u.cache_creation_input_tokens || 0) * 1.25 + (u.cache_read_input_tokens || 0) * 0.1;
+    var n = (u.server_tool_use && u.server_tool_use.web_search_requests) || 0;
+    return (inp * p.inp + (u.output_tokens || 0) * p.out) / 1e6 + n * 0.01;
   }
 
   /* ---------- Hilfen ---------- */
@@ -1511,6 +1674,8 @@ var LR = (function () {
 
   return { CATS: CATS, ORDER: ORDER, MAX_KM2: MAX_KM2, NEAR_M: NEAR_M, buildQuery: buildQuery, overpass: overpass, classify: classify,
     process: process, checkable: checkable, checkQuery: checkQuery, checkRead: checkRead, applyCheck: applyCheck,
+    AI_MODELS: AI_MODELS, AI_DEFAULT: AI_DEFAULT, AI_STATUS: AI_STATUS, AI_KNOWN: AI_KNOWN, aiRequest: aiRequest, aiRead: aiRead,
+    aiCost: aiCost, applyAI: applyAI,
     areaKm2: areaKm2, dist: dist, fmtArea: fmtArea, fmtDist: fmtDist, fmtMonth: fmtMonth, tier: tier };
 })();
 if (typeof module !== 'undefined') module.exports = LR;
@@ -1531,7 +1696,7 @@ const store = {
 const DEF = { cats: { mil: true, ind: true, pub: true, bahn: true, bau: true, ruin: true, brach: true }, known: 'unknown', size: 0, sort: 'score', names: false, brown: false };
 const saved = store.get('filters2', {}) || {};
 const S = {
-  items: [], view: [], sel: null, box: null, done: false, busy: null, err: null, tab: 'list', limit: 150, geo: {},
+  items: [], view: [], sel: null, box: null, done: false, busy: null, err: null, tab: 'list', limit: 150, geo: {}, geoP: {}, ai: {},
   f: Object.assign({}, DEF, saved, { cats: Object.assign({}, DEF.cats, saved.cats || {}) }),
   favs: store.get('favs', {}) || {}
 };
@@ -1663,6 +1828,8 @@ async function scan() {
   try {
     const j = await C.overpass(C.buildQuery(bb, S.f), ctl.signal, n => { S.try = n; updPill(); });
     S.items = C.process(j.elements || []);
+    const ki = store.get('ki', {}) || {};
+    for (const it of S.items) if (ki[it.id]) C.applyAI(it, ki[it.id]);
     S.box = map.getBounds(); S.done = true; S.sel = null; S.tab = 'list'; S.limit = 150;
     map.removeLayer(selMk);
     if (j.remark && /timed out|runtime|memory/i.test(j.remark)) toast('Zeitlimit des Servers erreicht, Ergebnis evtl. unvollständig. Kleineren Ausschnitt probieren.');
@@ -1704,7 +1871,8 @@ function counts() {
 }
 function sub(it) {
   const c = map.getCenter();
-  return [it.name ? it.label : null, (it.chk && CHK_SHORT[it.chk.v]) || it.state, C.fmtArea(it), C.fmtDist(C.dist(c.lat, c.lng, it.lat, it.lon))].filter(Boolean).join(' · ');
+  const ai = it.ai && C.AI_STATUS[it.ai.s] && C.AI_STATUS[it.ai.s].s;
+  return [it.name ? it.label : null, ai || (it.chk && CHK_SHORT[it.chk.v]) || it.state, C.fmtArea(it), C.fmtDist(C.dist(c.lat, c.lng, it.lat, it.lon))].filter(Boolean).join(' · ');
 }
 const row = it => '<button type="button" class="row" data-id="' + esc(it.id) + '"><i class="dot" style="background:' + C.CATS[it.cat].col + '"></i>' +
   '<span class="rt"><b>' + esc(title(it)) + '</b><span>' + esc(sub(it)) + '</span></span>' +
@@ -1758,8 +1926,8 @@ function detailHTML(it) {
     '<div class="kind"><i class="dot" style="background:' + c.col + '"></i>' + esc(c.name) + '</div>' +
     '<div class="ttl"><div><h2>' + esc(title(it)) + '</h2><p class="sub">' + esc([it.name ? it.label : null, it.state || 'Zustand unbekannt'].filter(Boolean).join(' · ')) + '</p></div>' +
     '<button type="button" class="star" data-act="fav" aria-pressed="' + fav + '" aria-label="' + (fav ? 'Aus Merkliste entfernen' : 'Merken') + '">' + STAR + '</button></div>' +
-    '<div class="meter"><em class="sc' + (it.score >= 70 ? ' top' : '') + '">' + it.score + '</em><div><strong>' + (it.chk && CHK_FLAG[it.chk.v] ? 'Eher kein Lost Place' : C.tier(it.score)) + '</strong><div class="bar"><i style="width:' + it.score + '%"></i></div></div></div>' +
-    chkHTML(it) +
+    '<div class="meter"><em class="sc' + (it.score >= 70 ? ' top' : '') + '">' + it.score + '</em><div><strong>' + (notLost(it) ? 'Eher kein Lost Place' : C.tier(it.score)) + '</strong><div class="bar"><i style="width:' + it.score + '%"></i></div></div></div>' +
+    chkHTML(it) + aiHTML(it) +
     '<dl class="facts">' + facts.map(f => '<dt>' + f[0] + '</dt><dd>' + f[1] + '</dd>').join('') + '</dl>' +
     '<div class="links">' +
       '<button type="button" class="lnk main" data-act="sat">Luftbild hier</button>' +
@@ -1799,9 +1967,151 @@ function chkHTML(it) {
   const age = [tsm ? 'OSM-Eintrag zuletzt geändert: ' + tsm : null, cdm ? 'vor Ort bestätigt: ' + cdm : null].filter(Boolean);
   const last = Math.max(+String(it.ts || '').slice(0, 4) || 0, +String(cd || '').slice(0, 4) || 0);
   if (last && new Date().getFullYear() - last >= 6) age.push('seit Jahren unverändert, also lieber erst im Luftbild nachsehen');
+  // Eine sichere KI-Recherche zählt statt des Gegenchecks
+  const ai = it.ai;
+  if (c && (c.n || c.b) && ai && ai.s !== 'unklar' && ai.c !== 'niedrig') txt += ' Die KI-Recherche unten ist aktueller und zählt stattdessen.';
   return '<div class="gcheck ' + cls + '"><b>' + head + '</b>' + (txt ? '<p>' + txt + '</p>' : '') +
     (age.length ? '<p class="age">' + esc(age.join(' · ')) + '</p>' : '') + '</div>';
 }
+// Sicheres KI-Ergebnis schlägt den Gegencheck
+function notLost(it) {
+  const a = it.ai;
+  if (a && a.s !== 'unklar' && a.c !== 'niedrig') return /^(umgenutzt|umbau|abgerissen)$/.test(a.s);
+  return !!(it.chk && CHK_FLAG[it.chk.v]);
+}
+
+/* ---------- KI-Check ---------- */
+// Auf Knopfdruck recherchiert Claude per Websuche, was heute dort ist. Läuft direkt aus dem Browser
+// mit dem eigenen API-Schlüssel; das SDK wird erst dann vom CDN geladen.
+const SDK_URL = 'https://cdn.jsdelivr.net/npm/@anthropic-ai/sdk@1.6.0/+esm';
+const AI_WARN = { teilweise_genutzt: 1, umgenutzt: 1, umbau: 1, abgerissen: 1 };
+const KNOWN_TXT = { kaum: 'kaum bekannt', bekannt: 'bekannt', sehr_bekannt: 'sehr bekannt' };
+let sdkP = null;
+function loadSDK() {
+  if (!sdkP) sdkP = import(SDK_URL).then(m => m.default, () => { sdkP = null; throw Object.assign(new Error('SDK nicht geladen'), { sdk: true }); });
+  return sdkP;
+}
+const host = u => { try { return new URL(u).hostname.replace(/^www\./, ''); } catch (e) { return ''; } };
+const usd = x => x < 0.01 ? 'unter 1 Cent' : 'ca. ' + x.toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' $';
+// Alle Kopien eines Orts: Fund, Merkliste, aktuelle Auswahl
+const copies = (it) => [...new Set([it, S.items.find(x => x.id === it.id), S.favs[it.id], S.sel && S.sel.id === it.id ? S.sel : null].filter(Boolean))];
+function chkText(it) {
+  const c = it.chk;
+  if (!c || c.v === 'na') return '';
+  if (!c.list.length) return 'nichts, keine Läden, Firmen oder Baustellen';
+  return c.list.join(', ') + (c.more ? ' und ' + c.more + ' weitere' : '');
+}
+function aiHTML(it) {
+  const run = S.ai[it.id], a = it.ai, key = store.get('aikey', '');
+  let cls = '', head, body = '', act = '';
+  if (run) {
+    const sec = Math.round((Date.now() - run.t0) / 1000);
+    head = 'KI recherchiert …';
+    body = '<p>Sucht im Web nach dem aktuellen Stand, das dauert meist 20 Sekunden bis 2 Minuten (' + sec + ' s' +
+      (run.n ? ', ' + run.n + (run.n === 1 ? ' Suche' : ' Suchen') : '') + ').' + (run.q ? ' Zuletzt: „' + esc(run.q) + '“' : '') + '</p>';
+    act = '<span></span><button type="button" class="mini" data-act="aistop">Abbrechen</button>';
+  } else if (a) {
+    const st = C.AI_STATUS[a.s] || C.AI_STATUS.unklar;
+    cls = AI_WARN[a.s] ? 'warn' : a.s === 'verlassen' ? 'ok' : '';
+    head = 'KI-Check: ' + st.l;
+    const meta = [a.d ? 'Stand: ' + a.d : null, 'Sicherheit: ' + a.c, a.b ? 'Bekanntheit: ' + KNOWN_TXT[a.b] : null].filter(Boolean).join(' · ');
+    body = '<p>' + esc(a.z) + '</p><p class="age">' + esc(meta) + '</p>' + (a.q && a.q.length
+      ? '<ul class="src">' + a.q.map(q => '<li><a href="' + esc(q.u) + '" target="_blank" rel="noopener">' + esc(q.t || host(q.u)) + '</a> <small>' + esc(host(q.u)) + '</small></li>').join('') + '</ul>'
+      : '<p class="age">Ohne Quellenangabe.</p>');
+    const m = C.AI_MODELS[a.m];
+    act = '<small class="age">Geprüft am ' + new Date(a.t).toLocaleDateString('de-DE') + (m ? ' mit ' + m.name : '') + (a.cost ? ', ' + usd(a.cost) : '') + '</small>' +
+      '<button type="button" class="mini" data-act="ai">Nochmal prüfen</button>';
+  } else if (it.aiErr) {
+    head = 'KI-Check hat nicht geklappt';
+    body = '<p>' + esc(it.aiErr) + '</p>';
+    act = '<span></span>' + (key ? '<button type="button" class="mini" data-act="ai">Nochmal versuchen</button>' : '<button type="button" class="mini" data-act="aisetup">Schlüssel eintragen</button>');
+  } else {
+    head = 'KI-Check';
+    body = '<p>Eine KI sucht im Web, ob der Ort noch leer steht oder längst umgebaut ist, und nennt ihre Quellen. Kostet ein paar Cent bis etwa einen halben Euro über deinen eigenen Anthropic-Schlüssel.</p>';
+    act = key ? '<button type="button" class="lnk main" data-act="ai">Mit KI prüfen</button>' : '<button type="button" class="lnk" data-act="aisetup">KI-Check einrichten</button>';
+  }
+  return '<div class="gcheck ' + cls + '" id="aibox"><b>' + head + '</b>' + body + '<div class="act">' + act + '</div></div>';
+}
+// Nur den KI-Kasten neu zeichnen (Fortschritt), damit die Detailansicht nicht springt
+function aiBox(it) {
+  if (!S.sel || S.sel.id !== it.id) return;
+  const el = document.getElementById('aibox');
+  if (el) el.outerHTML = aiHTML(S.sel);
+}
+function aiErrText(e, A) {
+  const msg = x => (x && x.error && x.error.error && x.error.error.message) || (x && x.message) || '';
+  if (e && e.sdk) return 'Das KI-Modul ließ sich nicht laden (cdn.jsdelivr.net). Internet an? Ein Werbe- oder DNS-Blocker kann es auch blockieren.';
+  if (e && e.refusal) return 'Die KI wollte diesen Ort nicht prüfen.';
+  if (e && e.empty) return 'Die KI hat kein Ergebnis geliefert. Nochmal versuchen?';
+  if (A) {
+    if (e instanceof A.AuthenticationError) return 'Der API-Schlüssel stimmt nicht. Prüf ihn unter Filter, KI-Check.';
+    if (e instanceof A.PermissionDeniedError) return 'Der Schlüssel darf das nicht. Ist die Websuche in der Anthropic-Konsole freigeschaltet? (' + msg(e) + ')';
+    if (e instanceof A.RateLimitError) return 'Zu viele Anfragen auf einmal. Kurz warten und nochmal versuchen.';
+    if (e instanceof A.BadRequestError) return 'Anthropic lehnt die Anfrage ab: ' + msg(e);
+    if (e instanceof A.InternalServerError) return 'Anthropic ist gerade überlastet. Gleich nochmal versuchen.';
+    if (e instanceof A.APIConnectionError) return 'Keine Verbindung zu Anthropic. Internet an?';
+    if (e instanceof A.APIError) return 'Fehler bei Anthropic (' + (e.status || '?') + '): ' + msg(e);
+  }
+  return 'Unbekannter Fehler: ' + String((e && e.message) || e);
+}
+function saveAI(it, res) {
+  const ki = store.get('ki', {}) || {};
+  ki[it.id] = res;
+  const ids = Object.keys(ki);
+  if (ids.length > 300) ids.sort((a, b) => ki[a].t - ki[b].t).slice(0, ids.length - 300).forEach(id => { delete ki[id]; });
+  store.set('ki', ki);
+  copies(it).forEach(x => { x.aiErr = null; C.applyAI(x, res); });
+  if (S.favs[it.id]) store.set('favs', S.favs);
+}
+async function runAI(it) {
+  const key = store.get('aikey', '');
+  if (!key) { openFilters('ki'); return; }
+  if (S.ai[it.id]) return;
+  const run = S.ai[it.id] = { ctl: new AbortController(), t0: Date.now(), n: 0, q: '' };
+  copies(it).forEach(x => { x.aiErr = null; });
+  aiBox(it);
+  const tick = setInterval(() => aiBox(it), 1000);
+  let A = null, res = null;
+  try {
+    A = await loadSDK();
+    await Promise.race([revgeo(it), new Promise(r => setTimeout(r, 4000))]);
+    const g = S.geo[it.id] || {}, model = store.get('aimodel', C.AI_DEFAULT);
+    const client = new A({ apiKey: key, dangerouslyAllowBrowser: true });
+    const params = C.aiRequest(it, { addr: g.ok ? g.txt : '', city: g.city, cc: g.cc, chk: chkText(it) }, model);
+    let msg = null, cost = 0, nudged = false;
+    // Gestreamt, damit lange Recherchen nicht in einen Timeout laufen; pause_turn wird fortgesetzt
+    for (let i = 0; i < 4; i++) {
+      const stream = client.beta.messages.stream(params, { signal: run.ctl.signal });
+      stream.on('contentBlock', b => {
+        if (b && b.type === 'server_tool_use' && b.name === 'web_search') { run.n++; if (b.input && b.input.query) run.q = b.input.query; aiBox(it); }
+      });
+      msg = await stream.finalMessage();
+      cost += C.aiCost(msg.usage, model);
+      if (msg.stop_reason === 'pause_turn') { params.messages = params.messages.concat({ role: 'assistant', content: msg.content }); continue; }
+      if (msg.stop_reason === 'end_turn' && !nudged && !C.aiRead(msg, params.messages)) {
+        nudged = true;
+        params.messages = params.messages.concat({ role: 'assistant', content: msg.content }, { role: 'user', content: 'Bitte melde dein Ergebnis jetzt mit dem Werkzeug ergebnis_melden.' });
+        continue;
+      }
+      break;
+    }
+    if (msg.stop_reason === 'refusal') throw Object.assign(new Error('refusal'), { refusal: true });
+    res = C.aiRead(msg, params.messages);
+    if (!res) throw Object.assign(new Error('leer'), { empty: true });
+    res.m = model; res.cost = cost;
+    saveAI(it, res);
+  } catch (e) {
+    if (!run.ctl.signal.aborted) { const t = aiErrText(e, A); copies(it).forEach(x => { x.aiErr = t; }); }
+  } finally {
+    clearInterval(tick);
+    delete S.ai[it.id];
+  }
+  const keep = body.scrollTop;
+  apply();
+  body.scrollTop = keep;
+  if (res && !(S.sel && S.sel.id === it.id)) toast('KI-Check fertig: ' + title(it) + ' – ' + C.AI_STATUS[res.s].l + '.');
+}
+
 function startCheck() {
   const list = S.items.filter(it => !it.chk && it.score >= 45 && C.checkable(it)).sort((a, b) => b.score - a.score).slice(0, 400);
   if (list.length) runCheck(list, true);
@@ -1844,7 +2154,9 @@ async function runCheck(list, batch) {
   if (batch && hit) toast('Gegencheck: ' + (hit === 1 ? '1 Ort ist' : hit + ' Orte sind') + ' laut OSM wieder in Betrieb, Baustelle oder nur Leerstand und ' + (hit === 1 ? 'rutscht' : 'rutschen') + ' nach unten.');
 }
 
-async function revgeo(it) {
+// Ein Abruf pro Ort; der KI-Check wartet darauf, um die Adresse mitzuschicken
+const revgeo = it => S.geoP[it.id] || (S.geoP[it.id] = geoLookup(it));
+async function geoLookup(it) {
   if (S.geo[it.id]) return;
   S.geo[it.id] = { txt: 'wird ermittelt …', city: '' };
   try {
@@ -1855,7 +2167,7 @@ async function revgeo(it) {
     const txt = [p.street ? p.street + (p.housenumber ? ' ' + p.housenumber : '') : null,
       [p.postcode, place].filter(Boolean).join(' ') || null,
       p.county && p.county !== place ? p.county : null].filter(Boolean).join(', ');
-    S.geo[it.id] = { txt: txt || 'unbekannt', city: place };
+    S.geo[it.id] = { txt: txt || 'unbekannt', city: place, cc: (p.countrycode || '').toUpperCase(), ok: !!txt };
   } catch (e) {
     S.geo[it.id] = { txt: 'nicht ermittelbar', city: '' };
   }
@@ -1903,7 +2215,7 @@ function select(id, fromList) {
 function unselect() { S.sel = null; map.removeLayer(selMk); render(true); }
 function toggleFav(it) {
   if (S.favs[it.id]) delete S.favs[it.id];
-  else S.favs[it.id] = { id: it.id, type: it.type, osm: it.osm, lat: it.lat, lon: it.lon, b: it.b, k: it.k, v: it.v, p: it.p, label: it.label, name: it.name, old: it.old, cat: it.cat, state: it.state, area: it.area, len: it.len, score: it.score, why: it.why, score0: it.score0, why0: it.why0, chk: it.chk, ts: it.ts, tags: it.tags, t: Date.now() };
+  else S.favs[it.id] = { id: it.id, type: it.type, osm: it.osm, lat: it.lat, lon: it.lon, b: it.b, k: it.k, v: it.v, p: it.p, label: it.label, name: it.name, old: it.old, cat: it.cat, state: it.state, area: it.area, len: it.len, score: it.score, why: it.why, score0: it.score0, why0: it.why0, chk: it.chk, ai: it.ai, ts: it.ts, tags: it.tags, t: Date.now() };
   store.set('favs', S.favs);
   const keep = body.scrollTop; render(); body.scrollTop = keep;
   toast(S.favs[it.id] ? 'Gemerkt' : 'Aus der Merkliste entfernt');
@@ -1940,6 +2252,9 @@ body.addEventListener('click', e => {
   if (act === 'back') unselect();
   else if (act === 'fav' && it) toggleFav(it);
   else if (act === 'recheck' && it) { runCheck([it], false); const keep = body.scrollTop; render(); body.scrollTop = keep; }
+  else if (act === 'ai' && it) runAI(it);
+  else if (act === 'aistop' && it && S.ai[it.id]) S.ai[it.id].ctl.abort();
+  else if (act === 'aisetup') openFilters('ki');
   else if (act === 'copy' && it) copy(it.lat.toFixed(5) + ', ' + it.lon.toFixed(5), 'Koordinaten kopiert');
   else if (act === 'sat' && it) { setBase('sat'); focusOn(it, 18); }
   else if (act === 'more') { S.limit += 150; render(); }
@@ -1961,22 +2276,34 @@ function renderFilters() {
   $('#fcats').innerHTML = C.ORDER.map(k => '<button type="button" class="chip" data-cat="' + k + '" aria-pressed="' + !!S.f.cats[k] + '"><i style="background:' + C.CATS[k].col + '"></i>' + C.CATS[k].name + (S.done ? '<em>' + (cnt[k] || 0) + '</em>' : '') + '</button>').join('');
   segSync('#fknown', S.f.known); segSync('#fsize', String(S.f.size));
   $('#fnames').checked = !!S.f.names; $('#fbrown').checked = !!S.f.brown;
+  $('#aikey').value = store.get('aikey', '');
+  segSync('#faimodel', store.get('aimodel', C.AI_DEFAULT));
 }
 function fdot() { $('#fbtn').dataset.on = String(S.f.known !== 'unknown' || S.f.size > 0 || C.ORDER.some(k => !S.f.cats[k])); }
-function openFilters() {
+function openFilters(section) {
   renderFilters(); fl.hidden = false;
+  if (section === 'ki') { $('#kih').scrollIntoView({ block: 'start' }); $('#aikey').focus({ preventScroll: true }); return; }
   fl.querySelector('.fpanel').scrollTop = 0;
   const first = fl.querySelector('.chip');
   if (first) first.focus({ preventScroll: true });
 }
-function closeFilters() { fl.hidden = true; $('#fbtn').focus(); }
-$('#fbtn').addEventListener('click', openFilters);
+function saveKey() {
+  const v = $('#aikey').value.trim();
+  if (v === store.get('aikey', '')) return;
+  store.set('aikey', v);
+  if (S.sel) { const keep = body.scrollTop; render(); body.scrollTop = keep; }
+}
+function closeFilters() { saveKey(); fl.hidden = true; $('#fbtn').focus(); }
+$('#fbtn').addEventListener('click', () => openFilters());
+$('#aikey').addEventListener('change', saveKey);
+$('#aikeydel').addEventListener('click', () => { $('#aikey').value = ''; saveKey(); toast('API-Schlüssel gelöscht.'); });
 $('#fdone').addEventListener('click', closeFilters);
 fl.addEventListener('click', e => {
   if (e.target === fl) { closeFilters(); return; }
   const ch = e.target.closest('.chip');
   if (ch) { const k = ch.dataset.cat; S.f.cats[k] = !S.f.cats[k]; renderFilters(); apply(); return; }
   const sb = e.target.closest('.seg button');
+  if (sb && sb.parentElement.id === 'faimodel') { store.set('aimodel', sb.dataset.v); renderFilters(); return; }
   if (sb) { if (sb.parentElement.id === 'fknown') S.f.known = sb.dataset.v; else S.f.size = +sb.dataset.v; renderFilters(); apply(); }
 });
 $('#fnames').addEventListener('change', e => { S.f.names = e.target.checked; S.box = null; store.set('filters2',S.f); updPill(); });
